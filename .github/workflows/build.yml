@@ -1,0 +1,36 @@
+name: Build and Publish LoadBalancedApp
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Package LoadBalancedApp
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🧰 Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 📦 Restore dependencies
+        run: dotnet restore AWSDeveloperApp/AWSDeveloperApp.sln
+
+      - name: 🛠️ Build the solution
+        run: dotnet build AWSDeveloperApp/AWSDeveloperApp.sln --configuration Release --no-restore
+
+      - name: 🚀 Publish LoadBalancedApp
+        run: dotnet publish AWSDeveloperApp/LoadBalancedApp/LoadBalancedApp.csproj --configuration Release --output ./artifact
+
+      - name: 📤 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoadBalancedApp
+          path: ./artifact
