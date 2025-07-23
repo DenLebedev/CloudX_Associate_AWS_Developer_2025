@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObjectVersion",
+        "s3:GetObjectVersionAcl",
+        "s3:GetObjectVersionForReplication",
+        "s3:GetObjectLegalHold",
+        "s3:GetObjectRetention",
+        "s3:GetReplicationConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::denislebedev-dev-bucket/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ReplicateObject",
+        "s3:ReplicateDelete",
+        "s3:ReplicateTags",
+        "s3:GetObjectVersionTagging"
+      ],
+      "Resource": "arn:aws:s3:::denislebedev-replica-bucket/*"
+    }
+  ]
+}

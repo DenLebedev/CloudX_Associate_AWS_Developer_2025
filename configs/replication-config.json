@@ -1,0 +1,14 @@
+{
+  "Role": "arn:aws:iam::740336594110:role/s3-replication-role",
+  "Rules": [
+    {
+      "ID": "replicate-to-eu",
+      "Status": "Enabled",
+      "Prefix": "",
+      "Destination": {
+        "Bucket": "arn:aws:s3:::denislebedev-replica-bucket",
+        "StorageClass": "STANDARD"
+      }
+    }
+  ]
+}
