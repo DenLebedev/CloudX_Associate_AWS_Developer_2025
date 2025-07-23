@@ -1,0 +1,12 @@
+[
+  {
+    "ContainingType": "LoadBalancedApp.Controllers.MetadataController",
+    "Method": "Get",
+    "RelativePath": "Metadata",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  }
+]
