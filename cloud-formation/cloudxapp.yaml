@@ -1,7 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudXApp - Base networking (VPC, Subnets, IGW, Routes) and S3 bucket
+Description: CloudXApp - VPC, S3, ALB/TG, Launch Template, ASG (app on port 5000)
 
 Parameters:
+  ProjectName:
+    Type: String
+    Default: CloudXApp
+    Description: Project name used in tags and resource names
+
   CloudXAppAMI:
     Type: String
     Default: ami-0be34563552dea612
@@ -16,14 +21,10 @@ Parameters:
   SSHAllowedIp:
     Type: String
     Default: 78.162.40.51/32
-    Description: CIDR allowed for SSH access (e.g., x.x.x.x/32)
-
-  ProjectName:
-    Type: String
-    Default: CloudXApp
-    Description: Project name used in resource tags/names
+    Description: CIDR allowed for SSH (e.g., x.x.x.x/32)
 
 Resources:
+  # ---------------- S3 ----------------
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -32,6 +33,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-Bucket'
 
+  # ---------------- VPC ----------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -105,11 +107,11 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
-# ---------------- Security Groups ----------------
+  # ---------------- Security Groups ----------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP/HTTPS access to ALB
+      GroupDescription: Allow HTTP/HTTPS to ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -130,7 +132,7 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow app port 5000 from ALB and SSH from admin IP
+      GroupDescription: Allow app port 5000 from ALB; SSH from admin IP
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -148,7 +150,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-Instance-SG'
 
-  # ---------------- Target Group ----------------
+  # ---------------- Target Group (port 5000) ----------------
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -182,7 +184,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-LoadBalancer'
 
-  # ---------------- Listener ----------------
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -193,18 +194,62 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
 
-Outputs:
-  VpcId:
-    Value: !Ref VPC
-  PublicSubnetAId:
-    Value: !Ref PublicSubnetA
-  PublicSubnetBId:
-    Value: !Ref PublicSubnetB
-  RouteTableId:
-    Value: !Ref PublicRouteTable
-  BucketName:
-    Value: !Ref S3Bucket
-  ALBDNSName:
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Description: DNS name of the Application Load Balancer
+  # ---------------- IAM Instance Profile (uses existing role) ----------------
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: CloudXApp-EC2-InstanceProfile
+      Roles:
+        - EC2ReadOnlyS3AccessRole    # existing role in your account
 
+  # ---------------- Launch Template ----------------
+  CloudXAppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: CloudXApp-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref CloudXAppAMI
+        InstanceType: !Ref CloudXAppInstanceType
+        IamInstanceProfile:
+          Name: !Ref EC2InstanceProfile
+        SecurityGroupIds:
+          - !Ref InstanceSecurityGroup
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true
+            DeviceIndex: 0
+            Groups:
+              - !Ref InstanceSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ProjectName}-EC2'
+        # App is baked into AMI and started by systemd; no UserData required
+
+  # ---------------- Auto Scaling Group + scaling ----------------
+  CloudXAppASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifiers:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      MinSize: '1'
+      DesiredCapacity: '1'
+      MaxSize: '3'
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 90
+      TargetGroupARNs:
+        - !Ref AppTargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CloudXAppLaunchTemplate
+        Version: !GetAtt CloudXAppLaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-EC2'
+          PropagateAtLaunch: true
+
+  CpuTargetTrackingScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref CloudXAppASG
+      PolicyType: TargetTrackin
