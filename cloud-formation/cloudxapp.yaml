@@ -230,7 +230,7 @@ Resources:
   CloudXAppASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifiers:
+      VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
       MinSize: '1'
